@@ -7,7 +7,7 @@ import java.net.InetSocketAddress;
 
 public class LocalWebSocketServerLauncher {
 
-    private static final Logger logger = LogManager.getLogger(LocalWebSocketServer.class);
+    private static final Logger logger = LogManager.getLogger(LocalWebSocketServerLauncher.class);
 
     public static void main(String[] args) {
         int port = 9070;
@@ -15,8 +15,11 @@ public class LocalWebSocketServerLauncher {
 
         logger.info("Starting WebSocket server...");
 
-        localWebSocketServer.start();
-
-        logger.info("WebSocket server is listening on ws://localhost:" + port);
+        try {
+            localWebSocketServer.start();
+            logger.info("WebSocket server is listening on ws://localhost:" + port);
+        } catch (Exception e) {
+            logger.error("Error starting WebSocket server: " + e.getMessage());
+        }
     }
 }
