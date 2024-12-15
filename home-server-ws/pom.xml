@@ -7,6 +7,23 @@
   <name>Archetype - home-server-ws</name>
   <url>http://maven.apache.org</url>
 
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+        <archive>
+          <manifestEntries>
+            <Main-Class>websocket.LocalWebSocketServerLauncher</Main-Class>
+          </manifestEntries>
+        </archive>
+      </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
   <dependencies>
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
