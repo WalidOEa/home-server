@@ -12,7 +12,7 @@ public class LocalWebSocketServerLauncher {
 
     public static void main(String[] args) {
         String host = "0.0.0.0";
-        int port = 9070;
+        int port = 8887;
         WebSocketServer localWebSocketServer = new LocalWebSocketServer(new InetSocketAddress(host, port));
 
         logger.info("Starting WebSocket server...");
