@@ -2,6 +2,7 @@ package websocket;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
 
@@ -10,16 +11,12 @@ public class LocalWebSocketServerLauncher {
     private static final Logger logger = LogManager.getLogger(LocalWebSocketServerLauncher.class);
 
     public static void main(String[] args) {
+        String host = "0.0.0.0";
         int port = 9070;
-        LocalWebSocketServer localWebSocketServer = new LocalWebSocketServer(new InetSocketAddress("localhost", port));
+        WebSocketServer localWebSocketServer = new LocalWebSocketServer(new InetSocketAddress(host, port));
 
         logger.info("Starting WebSocket server...");
 
-        try {
-            localWebSocketServer.start();
-            logger.info("WebSocket server is listening on ws://localhost:" + port);
-        } catch (Exception e) {
-            logger.error("Error starting WebSocket server: " + e.getMessage());
-        }
+        localWebSocketServer.run();
     }
 }
