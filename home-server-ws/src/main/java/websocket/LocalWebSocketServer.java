@@ -26,14 +26,13 @@ public class LocalWebSocketServer extends WebSocketServer {
 
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-        logger.info("Connection closed: " + conn.getRemoteSocketAddress() + " Reason: " + reason);
+        if (reason.isEmpty()) logger.info("Connection closed: " + conn.getRemoteSocketAddress() + " (Exit Code " + code + ")");
+        else logger.info("Connection closed: " + conn.getRemoteSocketAddress() + " (Exit Code " + code + ") Reason: " + reason);
     }
 
     @Override
     public void onMessage(WebSocket conn, String message) {
         logger.info("Message received: " + message);
-
-        conn.send("Echo: " + message);
     }
 
     @Override
