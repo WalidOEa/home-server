@@ -5,7 +5,9 @@ import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
@@ -15,7 +17,8 @@ public class LocalWebSocketServer extends WebSocketServer {
 
     private static final Logger logger = LogManager.getLogger(LocalWebSocketServer.class);
 
-    private Set<String> activeLobbies = new HashSet<>();
+    // A map to store the channels and their associated WebSocket connections
+    private Map<String, Set<WebSocket>> channels = new HashMap<>();
 
     public LocalWebSocketServer(InetSocketAddress address) {
         super(address);
@@ -42,6 +45,7 @@ public class LocalWebSocketServer extends WebSocketServer {
             conn.send("Polo");
         }
 
+        // Handle CREATE command (create a new lobby/channel)
         if (message.startsWith("CREATE")) {
             String[] parts = message.split(" ");
             String lobbyName = parts[1];
@@ -52,21 +56,52 @@ public class LocalWebSocketServer extends WebSocketServer {
                 conn.send("ERROR " + lobbyName + " already exists");
             } else {
                 createLobby(lobbyName);
+                joinChannel(lobbyName, conn); // Join the channel as soon as it's created
 
-                logger.info("Lobby created (" + lobbyName + ")");
-
-                conn.send(lobbyName + " created successfully");
+                logger.info("Lobby created successfully (" + lobbyName + ")");
             }
         }
 
+        // Handle LIST command (list all available channels)
         if (message.startsWith("LIST")) {
-            if (!activeLobbies.isEmpty()) {
-                String channels = String.join("\n", activeLobbies) + "\n";
+            if (!channels.isEmpty()) {
+                // Concatenate all the channel names with newlines
+                String channelsList = String.join("\n", channels.keySet()) + "\n";
 
-                logger.info("Current channels: " + channels);
+                logger.info("Current channels: " + channelsList);
 
-                conn.send("CHANNELS " + channels);
+                conn.send("CHANNELS " + channelsList);
+            } else {
+                conn.send("CHANNELS No channels available.");
             }
+        }
+
+        // Handle JOIN command (join an existing lobby/channel)
+        if (message.startsWith("JOIN")) {
+            // Extract the channel name
+            String[] parts = message.split(" ", 2);
+            String channelName = parts[1];
+
+            if (lobbyExists(channelName)) {
+                joinChannel(channelName, conn);
+
+                logger.info(conn + " joined channel " + channelName);
+
+                conn.send("JOIN");
+            } else {
+                logger.warn(channelName + " does not exist");
+
+                conn.send("ERROR Channel " + channelName + " does not exist.");
+            }
+        }
+
+        // TODO: NO CHANNEL NAME HERE
+        if (message.startsWith("USERS")) {
+            String channelName = message.split(" ")[1];
+
+            logger.info("Retrieving user list for " + channelName);
+
+            sendUsersInChannel(conn, channelName);
         }
     }
 
@@ -84,11 +119,33 @@ public class LocalWebSocketServer extends WebSocketServer {
         logger.info("WebSocket server started successfully");
     }
 
+    // Check if the lobby exists
     private boolean lobbyExists(String lobbyName) {
-        return activeLobbies.contains(lobbyName);
+        return channels.containsKey(lobbyName); // Check if the lobby name exists in the map
     }
 
+    // Create a new lobby (initialize a new set for that channel)
     private void createLobby(String lobbyName) {
-        activeLobbies.add(lobbyName);
+        channels.putIfAbsent(lobbyName, new HashSet<>());
+    }
+
+    // Add the client to the specified channel
+    private void joinChannel(String channelName, WebSocket conn) {
+        channels.putIfAbsent(channelName, new HashSet<>());
+        channels.get(channelName).add(conn);
+    }
+
+    private void sendUsersInChannel(WebSocket conn, String channelName) {
+        Set<WebSocket> usersInChannel = channels.get(channelName);
+
+        if (usersInChannel != null) {
+            StringBuilder usersList = new StringBuilder();
+
+            for (WebSocket user : usersInChannel) {
+                usersList.append(user.getRemoteSocketAddress().toString()).append("\n");
+            }
+
+            conn.send("USERS " + usersList);
+        }
     }
 }
