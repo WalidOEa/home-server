@@ -20,8 +20,6 @@ public class LocalWebSocketServer extends WebSocketServer {
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         logger.info("New connection: " + conn.getRemoteSocketAddress());
-
-        conn.send("Hello World!");
     }
 
     @Override
@@ -32,7 +30,13 @@ public class LocalWebSocketServer extends WebSocketServer {
 
     @Override
     public void onMessage(WebSocket conn, String message) {
-        logger.info("Message received: " + message);
+        logger.info("Message received -> " + message);
+
+        if ("Marco".equals(message)) {
+            logger.info("Sending message -> Polo");
+
+            conn.send("Polo");
+        }
     }
 
     @Override
