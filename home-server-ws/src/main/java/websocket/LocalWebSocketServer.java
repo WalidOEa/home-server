@@ -125,6 +125,23 @@ public class LocalWebSocketServer extends WebSocketServer {
                 logger.warn("Client " + conn.getRemoteSocketAddress() + " requested USERS but is not in any channel");
             }
         }
+
+        if (message.startsWith("MSG")) {
+            String channelName = clientChannel.get(conn);
+
+            if (channelName != null) {
+                String chatMessage = message.substring(4);
+
+                Player sender = getPlayerByConn(conn);
+                String username = sender != null ? sender.getUsername() : "Unknown";
+
+                String formattedMessage = username + ": " + chatMessage;
+
+                logger.info(formattedMessage);
+
+                broadcastMessage(channelName, formattedMessage, conn);
+            }
+        }
     }
 
     @Override
@@ -202,6 +219,28 @@ public class LocalWebSocketServer extends WebSocketServer {
             conn.send("USERS " + usersList);
         } else {
             conn.send("ERROR Channel " + channelName + " does not exist.");
+        }
+    }
+
+    private Player getPlayerByConn(WebSocket conn) {
+        for (Set<Player> players : channels.values()) {
+            for (Player player : players) {
+                if (player.getConn().equals(conn)) return player;
+            }
+        }
+
+        return null;
+    }
+
+    private void broadcastMessage(String channelName, String message, WebSocket sender) {
+        Set<Player> usersInChannel = channels.get(channelName);
+
+        if (usersInChannel != null) {
+            for (Player player : usersInChannel) {
+                player.getConn().send("MSG " + message);
+            }
+        } else {
+            sender.send("ERROR Channel " + channelName + " does not exist");
         }
     }
 }
