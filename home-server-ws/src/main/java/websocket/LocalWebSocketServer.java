@@ -13,6 +13,7 @@ import java.util.Set;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+//TODO: If Client A created a lobby and Client B joins it as the host then Client A joins it they both see START button
 public class LocalWebSocketServer extends WebSocketServer {
 
     private static final Logger logger = LogManager.getLogger(LocalWebSocketServer.class);
@@ -42,13 +43,9 @@ public class LocalWebSocketServer extends WebSocketServer {
 
                 boolean wasHost = players.stream().noneMatch(Player::isHost);
 
-                if (wasHost && !players.isEmpty()) {
-                    Player newHost = players.iterator().next();
-                    newHost.setHost(true);
-                    newHost.getConn().send("HOST");
+                if (wasHost && !players.isEmpty()) promoteNewHost(channelName);
 
-                    logger.info(newHost.getUsername() + " is now the host of " + channelName);
-                }
+                broadcastUsers(channelName);
             }
         }
 
@@ -81,7 +78,6 @@ public class LocalWebSocketServer extends WebSocketServer {
             }
         }
 
-        // Handle LIST command (list all available channels)
         if (message.startsWith("LIST")) {
             if (!channels.isEmpty()) {
                 // Concatenate all the channel names with newlines
@@ -95,9 +91,7 @@ public class LocalWebSocketServer extends WebSocketServer {
             }
         }
 
-        // Handle JOIN command (join an existing lobby/channel)
         if (message.startsWith("JOIN")) {
-            // Extract the channel name
             String[] parts = message.split(" ", 2);
             String channelName = parts[1];
 
@@ -107,10 +101,36 @@ public class LocalWebSocketServer extends WebSocketServer {
                 logger.info(conn + " joined channel " + channelName);
 
                 conn.send("JOIN");
+                broadcastUsers(channelName);
             } else {
                 logger.warn(channelName + " does not exist");
 
                 conn.send("ERROR Channel " + channelName + " does not exist.");
+            }
+        }
+
+        if (message.startsWith("PART")) {
+            String channelName = clientChannel.get(conn);
+
+            if (channelName != null) {
+                Set<Player> players = channels.get(channelName);
+
+                if (players != null) {
+                    players.removeIf(player -> player.getConn().equals(conn));
+
+                    boolean wasHost = players.stream().noneMatch(Player::isHost);
+
+                    if (wasHost && !players.isEmpty()) {
+                        promoteNewHost(channelName);
+                    }
+
+                    broadcastUsers(channelName);
+
+                    clientChannel.remove(conn);
+                    logger.info(conn.getRemoteSocketAddress() + " left channel " + channelName);
+                }
+            } else {
+                logger.warn("Client " + conn.getRemoteSocketAddress() + " is not in any channel");
             }
         }
 
@@ -168,6 +188,25 @@ public class LocalWebSocketServer extends WebSocketServer {
         channels.putIfAbsent(lobbyName, new HashSet<>());
 
         logger.info("Lobby created successfully (" + lobbyName + ")");
+    }
+
+    private void promoteNewHost(String channelName) {
+        Set<Player> players = channels.get(channelName);
+
+        if (players != null && !players.isEmpty()) {
+            Player newHost = players.iterator().next();
+
+            for (Player player : players) {
+                player.setHost(false);
+            }
+
+            newHost.setHost(true);
+            newHost.getConn().send("HOST");
+
+            logger.info(newHost.getUsername() + " is now the host of " + channelName);
+
+            broadcastUsers(channelName);
+        }
     }
 
     // Add the client to the specified channel
@@ -230,6 +269,27 @@ public class LocalWebSocketServer extends WebSocketServer {
         }
 
         return null;
+    }
+
+    private void broadcastUsers(String channelName) {
+        Set<Player> usersInChannel = channels.get(channelName);
+
+        if (usersInChannel != null) {
+            StringBuilder usersList = new StringBuilder();
+
+            for (Player player : usersInChannel) {
+                usersList.append(player.getUsername());
+
+                if (player.isHost()) usersList.append(" (Host)");
+                usersList.append("\n");
+            }
+
+            for (Player player : usersInChannel) {
+                player.getConn().send("USERS " + usersList);
+            }
+        } else {
+            logger.warn("Channel " + channelName + " does not exist");
+        }
     }
 
     private void broadcastMessage(String channelName, String message, WebSocket sender) {
