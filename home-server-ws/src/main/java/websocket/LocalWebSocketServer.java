@@ -150,25 +150,34 @@ public class LocalWebSocketServer extends WebSocketServer {
     private void createLobby(String lobbyName, WebSocket conn) {
         channels.putIfAbsent(lobbyName, new HashSet<>());
 
-        String username = "Player1";
-
-        Player host = new Player(username, conn, true);
-        channels.get(lobbyName).add(host);
-
-        clientChannel.put(conn, lobbyName);
-
-        conn.send("HOST");
-
-        logger.info("Lobby created successfully (" + lobbyName + ") with host -> " + username);
+        logger.info("Lobby created successfully (" + lobbyName + ")");
     }
 
     // Add the client to the specified channel
     private void joinChannel(String channelName, WebSocket conn) {
         channels.putIfAbsent(channelName, new HashSet<>());
 
-        String username = "Player" + (channels.get(channelName).size() + 1);
+        // Check if conn is already in channelName
+        if (clientChannel.containsKey(conn) && clientChannel.get(conn).equals(channelName)) {
 
+            conn.send("ERROR already in channel " + channelName);
+
+            logger.warn(conn.getRemoteSocketAddress() + " attempted to join channel " + channelName + " but is already in it");
+            return;
+        }
+
+        String username = "Player" + (channels.get(channelName).size() + 1);
         Player newPlayer = new Player(username, conn, false);
+
+        Set<Player> channelPlayers = channels.get(channelName);
+        if (channelPlayers.size() == 0) {
+            newPlayer.setHost(true);
+
+            conn.send("HOST");
+
+            logger.info(newPlayer.getUsername() + " is now the host of " + channelName);
+        }
+
         channels.get(channelName).add(newPlayer);
 
         // Track the connections current channel
