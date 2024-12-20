@@ -162,6 +162,29 @@ public class LocalWebSocketServer extends WebSocketServer {
                 broadcastMessage(channelName, formattedMessage, conn);
             }
         }
+
+        if (message.startsWith("NICK")) {
+            String[] parts = message.split(" ", 2);
+
+            if (parts.length > 1) {
+                String newNick = parts[1].trim();
+                String channelName = clientChannel.get(conn);
+
+                if (channelName != null) {
+                    Player player = getPlayerByConn(conn);
+
+                    if (player != null) {
+                        player.setUsername(newNick);
+
+                        logger.info(conn.getRemoteSocketAddress() + " changed nickname to " + newNick);
+
+                        conn.send("NICK " + newNick);
+
+                        broadcastUsers(channelName);
+                    }
+                }
+            }
+        }
     }
 
     @Override
