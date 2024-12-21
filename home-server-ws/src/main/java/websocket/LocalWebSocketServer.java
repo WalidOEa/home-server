@@ -185,6 +185,48 @@ public class LocalWebSocketServer extends WebSocketServer {
                 }
             }
         }
+
+        if (message.startsWith("START")) {
+            String channelName = clientChannel.get(conn);
+
+            if (channelName != null) {
+                Set<Player> playersInChannel = channels.get(channelName);
+
+                if (playersInChannel != null) {
+                    logger.info("Broadcasting START message to channel " + channelName);
+
+                    for (Player player : playersInChannel) {
+                        player.getConn().send("START");
+                    }
+                } else {
+                    logger.warn("Channel " + channelName + " does not exist or has no players");
+
+                    conn.send("ERROR Channel " + channelName + " does not exist or is empty");
+                }
+            } else {
+                logger.warn("Client " + conn.getRemoteSocketAddress() + " attempted START but is not in a channel");
+            }
+        }
+
+        if (message.startsWith("PIECE")) {
+            String channelName = clientChannel.get(conn);
+
+            if (channelName != null) {
+                Set<Player> playersInChannel = channels.get(channelName);
+
+                if (playersInChannel != null) {
+                    int pieceValue = (int) (Math.random() * 15);
+
+                    String pieceMessage = "PIECE " + pieceValue;
+
+                    for (Player player : playersInChannel) {
+                        player.getConn().send(pieceMessage);
+                    }
+
+                    logger.info("Broadcasted PIECE " + pieceValue + " to channel " + channelName);
+                }
+            }
+        }
     }
 
     @Override
