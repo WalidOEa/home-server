@@ -22,8 +22,13 @@ public class LocalWebSocketServer extends WebSocketServer {
 
     private Map<WebSocket, String> clientChannel = new HashMap<>();
 
+    private final ScoreDatabase scoreDatabase;
+
     public LocalWebSocketServer(InetSocketAddress address) {
         super(address);
+
+        this.scoreDatabase = new ScoreDatabase();
+        this.scoreDatabase.populateDatabase();
     }
 
     @Override
@@ -227,6 +232,44 @@ public class LocalWebSocketServer extends WebSocketServer {
                 }
             }
         }
+
+        if (message.startsWith("BOARD")) {
+            String channelName = clientChannel.get(conn);
+
+            if (channelName != null) {
+                handleBoardUpdate(channelName, conn, message.substring(6));
+            }
+        }
+
+        if (message.startsWith("LIVES")) {
+            String channelName = clientChannel.get(conn);
+
+            if (channelName != null) {
+                handleLivesUpdate(channelName, conn, message.substring(6));
+            }
+        }
+
+        if (message.startsWith("SCORE")) {
+            broadcastScore(conn, message.substring(7).trim());
+        }
+
+        if (message.startsWith("HISCORE")) {
+            String[] parts = message.replace("HISCORE", "").split(":");
+            String name = parts[0];
+            int score = Integer.parseInt(parts[1]);
+
+            scoreDatabase.upsertScore(name, score);
+            conn.send("NEWSCORE " + name + ":" + score);
+        }
+
+        if (message.startsWith("HISCORES")) {
+            String scores = scoreDatabase.getScores();
+            conn.send("HISCORES " + scores.trim());
+        }
+
+        if (message.startsWith("DIE")) {
+            removeConnectionFromChannel(conn);
+        }
     }
 
     @Override
@@ -243,7 +286,6 @@ public class LocalWebSocketServer extends WebSocketServer {
         logger.info("WebSocket server started successfully");
     }
 
-    // Check if the lobby exists
     private boolean lobbyExists(String lobbyName) {
         return channels.containsKey(lobbyName); // Check if the lobby name exists in the map
     }
@@ -366,6 +408,66 @@ public class LocalWebSocketServer extends WebSocketServer {
             }
         } else {
             sender.send("ERROR Channel " + channelName + " does not exist");
+        }
+    }
+
+    private void broadcastScore(WebSocket conn, String scores) {
+        String channel = clientChannel.get(conn);
+        Set<Player> players = channels.get(channel);
+
+        logger.info("Broadcasting scores to channel " + channel + ": " + scores);
+
+        for (Player player : players) {
+            WebSocket playerConn = player.getConn();
+
+            if (playerConn != conn) playerConn.send("SCORES " + scores);
+        }
+    }
+
+    @Deprecated
+    private void handleBoardUpdate(String channelName, WebSocket conn, String boardState) {
+        Set<Player> playersInChannel = channels.get(channelName);
+
+        if (playersInChannel != null) {
+            for (Player player : playersInChannel) {
+                if (!player.getConn().equals(conn)) player.getConn().send("BOARD " + boardState);
+            }
+        }
+        logger.info("Broadcasted BOARD state to channel " + channelName);
+    }
+
+    private void handleLivesUpdate(String channelName, WebSocket conn, String lives) {
+        Set<Player> usersInChannel = channels.get(channelName);
+
+        if (usersInChannel != null) {
+            for (Player player : usersInChannel) {
+                if (!player.getConn().equals(conn)) player.getConn().send("LIVES " + lives);
+            }
+        }
+        logger.info("Broadcasted LIVES update to channel " + channelName);
+    }
+
+    private void removeConnectionFromChannel(WebSocket conn) {
+        String channel = clientChannel.get(conn);
+
+        if (channel != null) {
+            Set<Player> players = channels.get(channel);
+
+            if (players != null) {
+                players.removeIf(player -> player.getConn().equals(conn));
+
+                logger.info("Removed connection from channel " + channel);
+
+                if (players.isEmpty()) {
+                    channels.remove(channel);
+
+                    logger.info("Channel " + channel + " is empty and has been removed");
+                }
+            }
+
+            clientChannel.remove(conn);
+        } else {
+            logger.error("Connection not associated with any channel");
         }
     }
 }
