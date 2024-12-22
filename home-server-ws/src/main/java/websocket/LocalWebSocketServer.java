@@ -28,7 +28,6 @@ public class LocalWebSocketServer extends WebSocketServer {
         super(address);
 
         this.scoreDatabase = new ScoreDatabase();
-        this.scoreDatabase.populateDatabase();
     }
 
     @Override
@@ -233,42 +232,65 @@ public class LocalWebSocketServer extends WebSocketServer {
             }
         }
 
-        if (message.startsWith("BOARD")) {
-            String channelName = clientChannel.get(conn);
+        if (message.startsWith("HISCORES")) {
+            String hiScores = scoreDatabase.getScores();
 
-            if (channelName != null) {
-                handleBoardUpdate(channelName, conn, message.substring(6));
-            }
-        }
-
-        if (message.startsWith("LIVES")) {
-            String channelName = clientChannel.get(conn);
-
-            if (channelName != null) {
-                handleLivesUpdate(channelName, conn, message.substring(6));
-            }
-        }
-
-        if (message.startsWith("SCORE")) {
-            broadcastScore(conn, message.substring(7).trim());
+            conn.send("HISCORES " + hiScores);
+            return;
         }
 
         if (message.startsWith("HISCORE")) {
-            String[] parts = message.replace("HISCORE", "").split(":");
-            String name = parts[0];
-            int score = Integer.parseInt(parts[1]);
+            String scoreData = message.replace("HISCORE", "").trim();
+            String[] parts = scoreData.split(":");
 
-            scoreDatabase.upsertScore(name, score);
-            conn.send("NEWSCORE " + name + ":" + score);
+            String username = parts[0].trim();
+            int score = Integer.parseInt(parts[1].trim());
+
+            if (scoreDatabase.upsertScore(username, score)) conn.send("NEWSCORE");
+
+
+            return;
         }
 
-        if (message.startsWith("HISCORES")) {
-            String scores = scoreDatabase.getScores();
-            conn.send("HISCORES " + scores.trim());
+        if (message.startsWith("SCORES")) {
+            String channelName = clientChannel.get(conn);
+
+            if (channelName != null) {
+                Player sender = getPlayerByConn(conn);
+
+                if (sender != null) {
+                    String formattedMsg = "SCORES "
+                            + sender.getUsername() + ":"
+                            + sender.getScore() + ":"
+                            + sender.getLives() + "\n";
+
+                    broadcastScores(channelName, conn, formattedMsg);
+                }
+            }
+            return;
+        }
+
+        if (message.startsWith("SCORE")) {
+            int newScore = Integer.parseInt(message.replace("SCORE", "").trim());
+            Player player = getPlayerByConn(conn);
+
+            player.setScore(newScore);
+            return;
+        }
+
+        if (message.startsWith("LIVES")) {
+            String[] parts = message.split(" ", 2);
+            int newLives = Integer.parseInt(parts[1].trim());
+            Player player = getPlayerByConn(conn);
+
+            player.setLives(newLives);
         }
 
         if (message.startsWith("DIE")) {
-            removeConnectionFromChannel(conn);
+            String channelName = clientChannel.get(conn);
+            Player player = getPlayerByConn(conn);
+
+            removePlayerFromChannel(player, channelName);
         }
     }
 
@@ -330,7 +352,7 @@ public class LocalWebSocketServer extends WebSocketServer {
         }
 
         String username = "Player" + (channels.get(channelName).size() + 1);
-        Player newPlayer = new Player(username, conn, false);
+        Player newPlayer = new Player(username, conn, false, 0, 3);
 
         Set<Player> channelPlayers = channels.get(channelName);
         if (channelPlayers.size() == 0) {
@@ -368,6 +390,14 @@ public class LocalWebSocketServer extends WebSocketServer {
         }
     }
 
+    private void removePlayerFromChannel(Player player, String channelName) {
+        if (player.isHost()) {
+            promoteNewHost(channelName);
+        }
+
+        channels.remove(player);
+    }
+
     private Player getPlayerByConn(WebSocket conn) {
         for (Set<Player> players : channels.values()) {
             for (Player player : players) {
@@ -376,6 +406,21 @@ public class LocalWebSocketServer extends WebSocketServer {
         }
 
         return null;
+    }
+
+    private void broadcastScores(String channelName, WebSocket conn, String msg) {
+        Set<Player> usersInChannel = channels.get(channelName);
+
+        if (usersInChannel != null) {
+            for (Player player : usersInChannel) {
+                if (!player.getConn().equals(conn)) {
+                    player.getConn().send(msg);
+                }
+            }
+            logger.info("Broadcasted SCORES message: " + msg + " in channel: " + channelName);
+        } else {
+            logger.warn("Channel " + channelName + " does not exist.");
+        }
     }
 
     private void broadcastUsers(String channelName) {
@@ -408,66 +453,6 @@ public class LocalWebSocketServer extends WebSocketServer {
             }
         } else {
             sender.send("ERROR Channel " + channelName + " does not exist");
-        }
-    }
-
-    private void broadcastScore(WebSocket conn, String scores) {
-        String channel = clientChannel.get(conn);
-        Set<Player> players = channels.get(channel);
-
-        logger.info("Broadcasting scores to channel " + channel + ": " + scores);
-
-        for (Player player : players) {
-            WebSocket playerConn = player.getConn();
-
-            if (playerConn != conn) playerConn.send("SCORES " + scores);
-        }
-    }
-
-    @Deprecated
-    private void handleBoardUpdate(String channelName, WebSocket conn, String boardState) {
-        Set<Player> playersInChannel = channels.get(channelName);
-
-        if (playersInChannel != null) {
-            for (Player player : playersInChannel) {
-                if (!player.getConn().equals(conn)) player.getConn().send("BOARD " + boardState);
-            }
-        }
-        logger.info("Broadcasted BOARD state to channel " + channelName);
-    }
-
-    private void handleLivesUpdate(String channelName, WebSocket conn, String lives) {
-        Set<Player> usersInChannel = channels.get(channelName);
-
-        if (usersInChannel != null) {
-            for (Player player : usersInChannel) {
-                if (!player.getConn().equals(conn)) player.getConn().send("LIVES " + lives);
-            }
-        }
-        logger.info("Broadcasted LIVES update to channel " + channelName);
-    }
-
-    private void removeConnectionFromChannel(WebSocket conn) {
-        String channel = clientChannel.get(conn);
-
-        if (channel != null) {
-            Set<Player> players = channels.get(channel);
-
-            if (players != null) {
-                players.removeIf(player -> player.getConn().equals(conn));
-
-                logger.info("Removed connection from channel " + channel);
-
-                if (players.isEmpty()) {
-                    channels.remove(channel);
-
-                    logger.info("Channel " + channel + " is empty and has been removed");
-                }
-            }
-
-            clientChannel.remove(conn);
-        } else {
-            logger.error("Connection not associated with any channel");
         }
     }
 }

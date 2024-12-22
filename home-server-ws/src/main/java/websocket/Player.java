@@ -7,10 +7,16 @@ public class Player {
     private WebSocket conn;
     private boolean host;
 
-    public Player(String username, WebSocket conn, boolean host) {
+    private int score;
+
+    private int lives;
+
+    public Player(String username, WebSocket conn, boolean host, int score, int lives) {
         this.username = username;
         this.conn = conn;
         this.host = host;
+        this.score = score;
+        this.lives = lives;
     }
 
     public String getUsername() {
@@ -25,6 +31,12 @@ public class Player {
         return host;
     }
 
+    public int getScore() {
+        return score;
+    }
+
+    public int getLives() { return lives; }
+
     public void setUsername(String newUsername) {
         this.username = newUsername;
     }
@@ -36,4 +48,8 @@ public class Player {
     public void setHost(boolean host) {
         this.host = host;
     }
+
+    public void setScore(int score) { this.score = score; }
+
+    public void setLives(int lives) { this.lives = lives; }
 }

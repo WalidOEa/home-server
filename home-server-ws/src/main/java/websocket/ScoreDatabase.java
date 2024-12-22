@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.sql.*;
 
+//TODO: LOTS OF BUGS
 public class ScoreDatabase {
 
     private static final Logger logger = LogManager.getLogger(ScoreDatabase.class);
@@ -13,6 +14,7 @@ public class ScoreDatabase {
 
     public ScoreDatabase() {
         createTable();
+        createScores();
     }
 
     private void createTable() {
@@ -31,6 +33,31 @@ public class ScoreDatabase {
         }
     }
 
+    public void createScores() {
+        logger.info("Creating new database");
+
+        String sql = "INSERT INTO scores(name, score) VALUES(?, ?)";
+
+        try (Connection conn = this.connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            for (int i = 10; i > 0; i--) {
+                String playerName = "Player" + (11 - i);
+                int score = i * 1000;
+
+                pstmt.setString(1, playerName);
+                pstmt.setInt(2, score);
+
+                pstmt.executeUpdate();
+            }
+
+            logger.info("Initial scores populated in the database");
+
+        } catch(SQLException e) {
+            logger.error(e.getMessage());
+        }
+    }
+
     private Connection connect() {
         try {
             return DriverManager.getConnection(DATABASE_URL);
@@ -40,31 +67,7 @@ public class ScoreDatabase {
         }
     }
 
-    public void populateDatabase() {
-        logger.info("Populating newly created database");
-
-        String sql = "INSERT INTO scores(name, score) VALUES(?, ?)";
-
-        try (Connection conn = connect();
-             PreparedStatement preparedStmt = conn.prepareStatement(sql)) {
-
-            for (int i = 10; i > 0; i--) {
-                String playerName = "Player" + (11 - i);
-                int score = i * 1000;
-
-                preparedStmt.setString(1, playerName);
-                preparedStmt.setInt(2, score);
-
-                preparedStmt.executeUpdate();
-            }
-
-            logger.info("Successfully populated database");
-        } catch (SQLException e) {
-            logger.error("Failed to populate scores into database, ", e);
-        }
-    }
-
-    public void upsertScore(String name, int score) {
+    public Boolean upsertScore(String name, int score) {
         String selectSql = "SELECT score FROM scores WHERE name = ?";
         String updateSql = "UPDATE scores SET score = ? WHERE name = ?";
         String insertSql = "INSERT INTO scores (name, score) VALUES (?, ?)";
@@ -94,9 +97,11 @@ public class ScoreDatabase {
 
                 logger.info("Inserted new score for " + name + ": " + score);
             }
+            return true;
         } catch (SQLException e) {
             logger.error("Failed to upsert score for " + name, e);
         }
+        return false;
     }
 
     public String getScores() {
